@@ -22,6 +22,7 @@ video_speed = 1.0
 advanced_log = false
 fade_in_duration = 0.8
 fade_out_duration = 0.8
+crf = "None"
 ```
 
 todo

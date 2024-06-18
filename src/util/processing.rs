@@ -7,7 +7,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::util::config::{Config, Settings};
 
 fn parse_ffmpeg_progress(line: &str) -> Option<f64> {
-    let re = Regex::new(r"time=(\d+):(\d+):(\d+.\d+)").unwrap();
+    let re = Regex::new(r"time=(\d+):(\d+):(\d+\.\d+)").unwrap();
     re.captures(line).and_then(|caps| {
         let hours: f64 = caps[1].parse().ok()?;
         let minutes: f64 = caps[2].parse().ok()?;
@@ -65,6 +65,7 @@ pub fn add_fade_effects(config: &Config) -> Result<(), String> {
         ffmpeg_path,
         use_gpu,
         video_bitrate,
+        crf,
         upscale_resolution,
         background_audio_path,
         audio_start_time,
@@ -182,18 +183,49 @@ pub fn add_fade_effects(config: &Config) -> Result<(), String> {
         }
     }
 
-    if *video_speed != 1.0 {
+    if video_filter_str.is_empty() {
         ffmpeg_command.extend(vec![
-            "-filter_complex".to_string(),
-            format!("[0:v]{}[v]", video_filter_str),
-            "-r".to_string(),
-            (framerate * video_speed).to_string(),
+            "-c:v".to_string(),
+            "copy".to_string()
         ]);
     } else {
         ffmpeg_command.extend(vec![
             "-filter_complex".to_string(),
             format!("[0:v]{}[v]", video_filter_str),
+            "-map".to_string(),
+            "[v]".to_string(),
         ]);
+
+        if *video_speed != 1.0 {
+            ffmpeg_command.extend(vec![
+                "-r".to_string(),
+                (framerate * video_speed).to_string(),
+            ]);
+        }
+
+        ffmpeg_command.extend(vec![
+            "-c:v".to_string(),
+            video_codec.to_string(),
+        ]);
+
+        if let Some(ref crf_value) = crf {
+            if crf_value.to_lowercase() != "none" && !use_gpu {
+                ffmpeg_command.extend(vec![
+                    "-crf".to_string(),
+                    crf_value.to_string(),
+                ]);
+            } else {
+                ffmpeg_command.extend(vec![
+                    "-b:v".to_string(),
+                    video_bitrate.clone(),
+                ]);
+            }
+        } else {
+            ffmpeg_command.extend(vec![
+                "-b:v".to_string(),
+                video_bitrate.clone(),
+            ]);
+        }
     }
 
     if let Some(ref audio_path) = background_audio_path {
@@ -206,8 +238,6 @@ pub fn add_fade_effects(config: &Config) -> Result<(), String> {
                         background_audio_volume, audio_filter_str
                     ),
                     "-map".to_string(),
-                    "[v]".to_string(),
-                    "-map".to_string(),
                     "[a]".to_string(),
                 ]);
             } else {
@@ -219,8 +249,6 @@ pub fn add_fade_effects(config: &Config) -> Result<(), String> {
                     "-filter_complex".to_string(),
                     normalize_filter,
                     "-map".to_string(),
-                    "[v]".to_string(),
-                    "-map".to_string(),
                     "[a]".to_string(),
                 ]);
             }
@@ -228,8 +256,6 @@ pub fn add_fade_effects(config: &Config) -> Result<(), String> {
             ffmpeg_command.extend(vec![
                 "-filter_complex".to_string(),
                 format!("[0:a]volume={}{}", original_audio_volume, audio_filter_str),
-                "-map".to_string(),
-                "[v]".to_string(),
                 "-map".to_string(),
                 "[a]".to_string(),
             ]);
@@ -239,19 +265,11 @@ pub fn add_fade_effects(config: &Config) -> Result<(), String> {
             "-filter_complex".to_string(),
             format!("[0:a]volume={}{}", original_audio_volume, audio_filter_str),
             "-map".to_string(),
-            "[v]".to_string(),
-            "-map".to_string(),
             "[a]".to_string(),
         ]);
     }
 
     ffmpeg_command.extend(vec![
-        "-c:v".to_string(),
-        video_codec.to_string(),
-        "-preset".to_string(),
-        "slow".to_string(),
-        "-b:v".to_string(),
-        video_bitrate.clone(),
         "-c:a".to_string(),
         "aac".to_string(),
         "-b:a".to_string(),

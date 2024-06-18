@@ -13,6 +13,7 @@ pub struct Settings {
     pub ffmpeg_path: String,
     pub use_gpu: bool,
     pub video_bitrate: String,
+    pub crf: Option<String>,
     pub upscale_resolution: Option<String>,
     pub background_audio_path: Option<String>,
     pub audio_start_time: f64,
