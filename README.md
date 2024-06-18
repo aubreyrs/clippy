@@ -27,3 +27,4 @@ fade_out_duration = 0.8
 todo
 - add better logging
 - refactor shit (stuff is messy)
+- fix audio related stuff
